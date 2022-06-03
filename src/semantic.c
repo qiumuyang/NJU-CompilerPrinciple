@@ -2,7 +2,7 @@
 
 const static int INIT_EXP_LEN = 1024;
 static unsigned long long unamed_struct = 0;
-// count unamed_structs in order that each of them can get a unique name
+// count unamed_structs so each of them can get a unique name
 // similarly, we have var 'dup_param' in parseVarList
 
 // TODO: write semantic analysis here
@@ -23,6 +23,7 @@ void parseCompSt(treeNode* compst, type* retval);
 void parseStmtList(treeNode* list, type* retval);
 void parseStmt(treeNode* list, type* retval);
 bool checkArgs(treeNode* arglist, type* func);
+bool checkFieldNoArray(field* fields);
 bool isLeftValue(treeNode* exp);
 char* showExp(treeNode* exp);
 static void _showExpR(treeNode* exp, char** buffer, int* len, int* maxLen);
@@ -661,6 +662,22 @@ bool checkArgs(treeNode* arglist, type* func) {
     return (fp == NULL) && (node == NULL);
 }
 
+bool checkFieldNoArray(field* fields) {
+    if (fields == NULL) {
+        return true;
+    }
+    else {
+        type* ft = fields->fieldtype;
+        switch (ft->typeId) {
+            case ArrayType:
+                return false;
+            case StructType:
+                return checkFieldNoArray(ft->structure.fields);
+        }
+    }
+    return checkFieldNoArray(fields->next);
+}
+
 bool isLeftValue(treeNode* exp) {
     // only [ID] [Exp LB Exp RB] [Exp DOT ID] can be leftValue
     if (exp == NULL || exp->token != Exp) {
@@ -669,7 +686,17 @@ bool isLeftValue(treeNode* exp) {
     }
     if (exp->childCnt == 1 && exp->childs[0]->token == ID) {
         // [ID]
-        return true;
+        char* varname = exp->childs[0]->str;
+        type* t = tableFind(varname);
+        if (t->typeId == IntType || t->typeId == FloatType) {
+            return true;
+        }
+        if (t->typeId == FuncType || t->typeId == ArrayType || t->typeId = StructPlaceHolder) {
+            return false;
+        }
+        if (t->typeId == StructType) {
+            return true;
+        }
     } else if (exp->childCnt == 4 && exp->childs[1]->token == LB) {
         // [Exp LB Exp RB]
         return isLeftValue(exp->childs[0]);
